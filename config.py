@@ -9,8 +9,8 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 
 GAME_INTERVAL = 5400  # 1 hora y media en segundos (90 minutos * 60)
 ROUND_DURATION = 60
-POINTS_CORRECT = 15
-POINTS_WRONG = -5
+POINTS_CORRECT = 10
+POINTS_WRONG = -15
 
 ENGLISH_WORDS = [
     "apple", "house", "car", "book", "computer", "phone", "table", "chair",
