@@ -260,6 +260,9 @@ class GameManager:
         
         print(f"✅ Ronda configurada: {self.current_word} -> {self.current_player.display_name} (Humano: {not self.current_player.bot})")
         
+        # Ping al jugador seleccionado
+        ping_message = f"🎯 **¡{self.current_player.mention} es tu turno!** 🎯"
+        
         embed = discord.Embed(
             title="🎯 Nueva Ronda de Traducción",
             description=f"**Palabra en inglés:** `{self.current_word.upper()}`\n"
@@ -270,6 +273,8 @@ class GameManager:
         )
         embed.set_footer(text="Responde con la traducción en español")
         
+        # Enviar ping y embed juntos
+        await self.channel.send(ping_message)
         await self.channel.send(embed=embed)
         
         print(f"⏰ Iniciando temporizador de {ROUND_DURATION} segundos...")

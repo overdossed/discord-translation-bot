@@ -7,10 +7,10 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD_ID = int(os.getenv('GUILD_ID', 0))
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 
-GAME_INTERVAL = 300
+GAME_INTERVAL = 5400  # 1 hora y media en segundos (90 minutos * 60)
 ROUND_DURATION = 60
-POINTS_CORRECT = 10
-POINTS_WRONG = -2
+POINTS_CORRECT = 15
+POINTS_WRONG = -5
 
 ENGLISH_WORDS = [
     "apple", "house", "car", "book", "computer", "phone", "table", "chair",
