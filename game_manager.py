@@ -109,23 +109,46 @@ class GameManager:
                     if user_translation == alt.lower():
                         return True
                 
-                # Verificar si contiene la traducción (flexibilidad)
-                if user_translation in correct_translation or correct_translation in user_translation:
-                    return True
+                # Verificar errores de tipeo menores (máximo 1 carácter de diferencia)
+                if len(user_translation) >= 3 and len(correct_translation) >= 3:
+                    # Solo acepta si las palabras son muy similares en longitud
+                    if abs(len(user_translation) - len(correct_translation)) <= 1:
+                        # Verificar si es un error de tipeo menor
+                        if self.are_similar_words(user_translation, correct_translation):
+                            return True
                     
                 return False
         except Exception as e:
             print(f"❌ Error verificando traducción con API: {e}")
-            # Fallback al método original
+            # Fallback al método original (también más estricto)
             correct = self.get_correct_translation(word).lower()
             
             if user_translation == correct:
                 return True
             
-            if user_translation in correct or correct in user_translation:
-                return True
+            # Verificar errores de tipeo menores en fallback también
+            if len(user_translation) >= 3 and len(correct) >= 3:
+                if abs(len(user_translation) - len(correct)) <= 1:
+                    if self.are_similar_words(user_translation, correct):
+                        return True
                 
             return False
+    
+    def are_similar_words(self, word1: str, word2: str) -> bool:
+        """Verificar si dos palabras son muy similares (máximo 1 diferencia)"""
+        if len(word1) == len(word2):
+            # Misma longitud: verificar cuántos caracteres difieren
+            differences = sum(c1 != c2 for c1, c2 in zip(word1, word2))
+            return differences <= 1  # Solo 1 carácter diferente máximo
+        elif abs(len(word1) - len(word2)) == 1:
+            # Diferencia de 1 carácter: verificar si uno está contenido en el otro
+            shorter, longer = (word1, word2) if len(word1) < len(word2) else (word2, word1)
+            # Verificar si al eliminar 1 carácter del más largo obtenemos el más corto
+            for i in range(len(longer)):
+                if longer[:i] + longer[i+1:] == shorter:
+                    return True
+            return False
+        return False
     
     def update_score(self, user_id: int, points: int):
         if str(user_id) not in self.scores:
