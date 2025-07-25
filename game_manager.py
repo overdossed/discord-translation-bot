@@ -5,23 +5,58 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import discord
 import requests
-from config import ENGLISH_WORDS, CORRECT_TRANSLATIONS, GAME_INTERVAL, ROUND_DURATION, POINTS_CORRECT, POINTS_WRONG
+from config import (
+    ENGLISH_WORDS, CORRECT_TRANSLATIONS, GAME_INTERVAL, ROUND_DURATION, 
+    POINTS_CORRECT, POINTS_WRONG, PALABRA_TIPO, PROBABILIDADES_AUTO, 
+    CATEGORIAS_PREFERIDAS, COMANDOS_TIPO
+)
 from api_config import API_URL, USE_FALLBACK_APIS
 
-def get_random_word_from_api():
-    """Obtener palabra aleatoria de nuestra propia API"""
+def get_random_word_from_api(tipo_forzado=None):
+    """Obtener palabra aleatoria de nuestra propia API según configuración"""
     try:
         print(f"🎯 Obteniendo palabra de nuestra API: {API_URL}")
         
-        # Usar nuestra API con categorías aleatorias
-        categories = ["animals", "colors", "food", "objects", "actions", "warframe_mods"]
-        category = random.choice(categories)
+        # Determinar el tipo de palabra a usar
+        tipo_actual = tipo_forzado or PALABRA_TIPO
         
-        response = requests.get(f"{API_URL}/palabra-random?categoria={category}", timeout=10)
+        if tipo_actual == "auto":
+            # Selección aleatoria basada en probabilidades
+            rand = random.randint(1, 100)
+            if rand <= PROBABILIDADES_AUTO["normal"]:
+                tipo_seleccionado = "normal"
+            elif rand <= PROBABILIDADES_AUTO["normal"] + PROBABILIDADES_AUTO["warframe"]:
+                tipo_seleccionado = "warframe"
+            else:
+                tipo_seleccionado = "mixto"
+        else:
+            tipo_seleccionado = tipo_actual
+        
+        print(f"📝 Tipo de palabra seleccionado: {tipo_seleccionado}")
+        
+        # Seleccionar endpoint según el tipo
+        if tipo_seleccionado == "normal":
+            endpoint = f"{API_URL}/palabra-normal"
+            categoria = random.choice(CATEGORIAS_PREFERIDAS["normal"])
+        elif tipo_seleccionado == "warframe":
+            endpoint = f"{API_URL}/palabra-warframe"
+            categoria = None  # Warframe solo tiene una categoría
+        else:  # mixto
+            endpoint = f"{API_URL}/palabra-mixta"
+            categoria = random.choice(CATEGORIAS_PREFERIDAS["mixto"])
+        
+        # Construir URL con parámetros
+        url = endpoint
+        if categoria:
+            url += f"?categoria={categoria}"
+        
+        print(f"🌐 Llamando a: {url}")
+        
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             word = data["palabra"]
-            print(f"✅ Palabra obtenida de nuestra API: '{word}' (categoría: {data['categoria']})")
+            print(f"✅ Palabra obtenida: '{word}' (tipo: {tipo_seleccionado}, categoría: {data.get('categoria', 'N/A')})")
             return word
         else:
             print(f"❌ Error HTTP obteniendo palabra: {response.status_code}")
@@ -31,10 +66,11 @@ def get_random_word_from_api():
         print(f"❌ Error obteniendo palabra de nuestra API: {e}")
         return None
 
-def translate_word_with_api(word, from_lang="en", to_lang="es"):
+def translate_word_with_api(word, tipo="mixto"):
     """Obtener traducción de nuestra propia API"""
     try:
-        response = requests.get(f"{API_URL}/traducir/{word}", timeout=10)
+        url = f"{API_URL}/traducir/{word}?tipo={tipo}"
+        response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -57,11 +93,27 @@ class GameManager:
         self.current_word = None
         self.current_player = None
         self.scores = {}
-        self.game_task = None
-        self.round_task = None
         self.channel = None
         self.guild = None
-        
+        self.game_task = None
+        self.round_task = None
+        # Nuevo: tipo de palabras configurado
+        self.tipo_palabras = "auto"  # Por defecto usa el modo automático
+        self.load_scores()
+        self.load_config()
+    
+    def load_config(self):
+        """Cargar configuración guardada"""
+        try:
+            with open('bot_config.json', 'r') as f:
+                config = json.load(f)
+                self.tipo_palabras = config.get('tipo_palabras', 'auto')
+                print(f"⚙️ Configuración cargada: tipo_palabras = {self.tipo_palabras}")
+        except FileNotFoundError:
+            print("⚙️ No se encontró archivo de configuración, usando valores por defecto")
+        except Exception as e:
+            print(f"⚙️ Error cargando configuración: {e}")
+    
     def load_scores(self):
         try:
             with open('scores.json', 'r', encoding='utf-8') as f:
@@ -74,17 +126,22 @@ class GameManager:
             json.dump(self.scores, f, ensure_ascii=False, indent=2)
     
     def get_random_word(self) -> str:
-        word = get_random_word_from_api()
+        """Obtener palabra aleatoria según configuración actual"""
+        word = get_random_word_from_api(tipo_forzado=self.tipo_palabras)
         if word:
             return word
         else:
+            # Fallback a palabras locales
+            print("⚠️ API falló, usando palabras de fallback")
             return random.choice(ENGLISH_WORDS)
     
     def get_correct_translation(self, word: str) -> str:
-        translation = translate_word_with_api(word)
+        """Obtener traducción según el tipo actual"""
+        translation = translate_word_with_api(word, tipo=self.tipo_palabras if self.tipo_palabras != "auto" else "mixto")
         if translation:
             return translation
         else:
+            # Fallback a traducciones locales
             return CORRECT_TRANSLATIONS.get(word.lower(), "traducción no encontrada")
     
     def check_translation(self, word: str, user_translation: str) -> bool:
