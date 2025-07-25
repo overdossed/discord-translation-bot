@@ -14,7 +14,7 @@ def get_random_word_from_api():
         print(f"🎯 Obteniendo palabra de nuestra API: {API_URL}")
         
         # Usar nuestra API con categorías aleatorias
-        categories = ["animals", "colors", "food", "objects", "actions"]
+        categories = ["animals", "colors", "food", "objects", "actions", "warframe_mods"]
         category = random.choice(categories)
         
         response = requests.get(f"{API_URL}/palabra-random?categoria={category}", timeout=10)
