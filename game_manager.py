@@ -6,65 +6,45 @@ from typing import Dict, List, Optional
 import discord
 import requests
 from config import ENGLISH_WORDS, CORRECT_TRANSLATIONS, GAME_INTERVAL, ROUND_DURATION, POINTS_CORRECT, POINTS_WRONG
+from api_config import API_URL, USE_FALLBACK_APIS
 
 def get_random_word_from_api():
+    """Obtener palabra aleatoria de nuestra propia API"""
     try:
-        categories = [
-            "animals", "colors", "food", "objects", "family", "body", "clothes", 
-            "house", "nature", "weather", "time", "numbers", "emotions", "jobs"
-        ]
+        print(f"🎯 Obteniendo palabra de nuestra API: {API_URL}")
+        
+        # Usar nuestra API con categorías aleatorias
+        categories = ["animals", "colors", "food", "objects", "actions"]
         category = random.choice(categories)
         
-        print(f"🎯 Obteniendo palabra de categoría: {category}")
-        
-        response = requests.get(f"https://api.datamuse.com/words?rel_trg={category}&max=50&md=p")
+        response = requests.get(f"{API_URL}/palabra-random?categoria={category}", timeout=10)
         if response.status_code == 200:
-            words = response.json()
-            if words:
-                # Filtrar palabras muy largas o raras
-                filtered_words = []
-                for word_data in words:
-                    word = word_data["word"]
-                    # Solo palabras de 3-8 letras, sin guiones, sin números
-                    if (3 <= len(word) <= 8 and 
-                        word.isalpha() and 
-                        word.islower() and
-                        not any(char in word for char in ['-', '_', ' '])):
-                        filtered_words.append(word)
-                
-                if filtered_words:
-                    selected_word = random.choice(filtered_words)
-                    print(f"✅ Palabra seleccionada: '{selected_word}' (categoría: {category})")
-                    return selected_word
-                else:
-                    print(f"❌ No se encontraron palabras válidas en la categoría: {category}")
-            else:
-                print(f"❌ No se encontraron palabras para la categoría: {category}")
+            data = response.json()
+            word = data["palabra"]
+            print(f"✅ Palabra obtenida de nuestra API: '{word}' (categoría: {data['categoria']})")
+            return word
         else:
-            print(f"❌ Error HTTP: {response.status_code}")
+            print(f"❌ Error HTTP obteniendo palabra: {response.status_code}")
         
         return None
     except Exception as e:
-        print(f"❌ Error obteniendo palabra aleatoria: {e}")
+        print(f"❌ Error obteniendo palabra de nuestra API: {e}")
         return None
 
 def translate_word_with_api(word, from_lang="en", to_lang="es"):
+    """Obtener traducción de nuestra propia API"""
     try:
-        url = f"https://api.mymemory.translated.net/get?q={word}&langpair={from_lang}|{to_lang}"
-        response = requests.get(url)
+        response = requests.get(f"{API_URL}/traducir/{word}", timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            if data["responseStatus"] == 200:
-                return data["responseData"]["translatedText"]
-            else:
-                print(f"Error en traducción: {data.get('responseDetails', 'Error desconocido')}")
-                return None
+            print(f"✅ Traducción obtenida de nuestra API: '{word}' -> '{data['traduccion']}'")
+            return data["traduccion"]
         else:
-            print(f"Error HTTP: {response.status_code}")
+            print(f"❌ Error HTTP obteniendo traducción: {response.status_code}")
             return None
     except Exception as e:
-        print(f"Error traduciendo palabra: {e}")
+        print(f"❌ Error obteniendo traducción de nuestra API: {e}")
         return None
     
     
@@ -108,16 +88,44 @@ class GameManager:
             return CORRECT_TRANSLATIONS.get(word.lower(), "traducción no encontrada")
     
     def check_translation(self, word: str, user_translation: str) -> bool:
-        correct = self.get_correct_translation(word).lower()
+        """Verificar si la traducción es correcta usando nuestra API"""
         user_translation = user_translation.lower().strip()
         
-        if user_translation == correct:
-            return True
-        
-        if user_translation in correct or correct in user_translation:
-            return True
+        # Obtener traducción completa de nuestra API
+        try:
+            response = requests.get(f"{API_URL}/traducir/{word}", timeout=10)
             
-        return False
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Verificar traducción principal
+                correct_translation = data["traduccion"].lower()
+                if user_translation == correct_translation:
+                    return True
+                
+                # Verificar alternativas
+                alternativas = data.get("alternativas", [])
+                for alt in alternativas:
+                    if user_translation == alt.lower():
+                        return True
+                
+                # Verificar si contiene la traducción (flexibilidad)
+                if user_translation in correct_translation or correct_translation in user_translation:
+                    return True
+                    
+                return False
+        except Exception as e:
+            print(f"❌ Error verificando traducción con API: {e}")
+            # Fallback al método original
+            correct = self.get_correct_translation(word).lower()
+            
+            if user_translation == correct:
+                return True
+            
+            if user_translation in correct or correct in user_translation:
+                return True
+                
+            return False
     
     def update_score(self, user_id: int, points: int):
         if str(user_id) not in self.scores:
